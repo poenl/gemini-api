@@ -17,38 +17,44 @@ export default {
 
 		const headersKey = request.headers.get('X-goog-api-key');
 		let key;
-
+		// 处理 headers
 		const newHeaders = new Headers(request.headers);
 		newHeaders.delete('cf');
 		if (headersKey !== null) {
 			key = await insertKey(headersKey);
 			newHeaders.set('X-goog-api-key', key);
 		}
-
+		// 处理 url
 		const url = new URL(request.url);
 		url.hostname = 'generativelanguage.googleapis.com';
 		url.port = '';
 		url.protocol = 'https:';
-
-		const getGeminiRes = () => {
-			return fetch(url.toString(), {
-				method: request.method,
-				headers: newHeaders,
-				body: request.body,
-			});
-		};
+		// 处理 body
+		let teedRequestBody: [ReadableStream, ReadableStream];
+		if (request.body) {
+			teedRequestBody = request.body.tee();
+		} else {
+			teedRequestBody = [null as any, null as any];
+		}
 
 		// 重试次数
 		const retryCount = 5;
-		for (let i = 0; i < retryCount; i++) {
+		for (let i = 1; i <= retryCount; i++) {
 			try {
-				const geminiRes = await getGeminiRes();
+				if (i < retryCount) teedRequestBody = teedRequestBody[1].tee();
+
+				const geminiRes = await fetch(url.toString(), {
+					method: request.method,
+					headers: newHeaders,
+					body: i !== retryCount ? teedRequestBody[0] : teedRequestBody[1],
+				});
 				if (!geminiRes.ok) throw geminiRes;
 				console.log('success, key:', key);
 				return geminiRes;
 			} catch (error) {
 				const res = error as Response;
 				// 处理错误
+				// 官方状态码：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				switch (res.status) {
 					case 404:
 						// key 为空
@@ -62,13 +68,12 @@ export default {
 							if (key) await deleteKey(key);
 							return res;
 						}
-
 						console.log('key error, key:', key);
 						[key] = await Promise.all([getKey(), deleteKey(key!)]);
 				}
 
 				// 重试结束，直接返回错误
-				if (i === retryCount - 1) return res;
+				if (i === retryCount) return res;
 			}
 		}
 		// 不会执行到这里，解决类型检查错误
