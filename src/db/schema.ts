@@ -6,6 +6,7 @@ export const keyTable = sqliteTable('keys', {
 	alive: int({ mode: 'boolean' }).notNull().default(true),
 });
 
-export const keyCursorTable = sqliteTable('key_cursor', {
-	keyId: int().primaryKey().unique().default(0),
+export const cursorTable = sqliteTable('cursor', {
+	id: int().primaryKey({ autoIncrement: true }),
+	cursor: int().unique().default(0),
 });
