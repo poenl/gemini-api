@@ -54,10 +54,10 @@ export default {
 			});
 		}
 
-		const headersKey = request.headers.get('X-goog-api-key');
-		let key;
-		// 处理 headers
 		const newHeaders = processHeaders(request);
+
+		let key;
+		const headersKey = request.headers.get('X-goog-api-key');
 		if (headersKey !== null) {
 			key = await insertKey(headersKey);
 			newHeaders.set('X-goog-api-key', key);
@@ -89,7 +89,6 @@ export default {
 				return geminiRes;
 			} catch (error) {
 				const res = error as Response;
-				console.error(`请求失败 (尝试 ${i}/${RETRY_COUNT})，错误信息:`, res);
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				switch (res.status) {
@@ -114,6 +113,6 @@ export default {
 			}
 		}
 		// 不会执行到这里，解决类型检查错误
-		return new Response('Unexpected retry failure', { status: 500 });
+		return new Response('', { status: 500 });
 	},
 } satisfies ExportedHandler<Env>;

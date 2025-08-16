@@ -1,12 +1,13 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, gt, and } from 'drizzle-orm';
 import { DB } from './db/init';
 import { cursorTable, keyTable } from './db/schema';
 
 export const getKey = async () => {
-	const [{ cursor }] = await DB.selectDistinct().from(cursorTable).where(eq(cursorTable.id, 1));
+	const [{ cursor }] = await DB.select().from(cursorTable).where(eq(cursorTable.id, 1));
+	if (!cursor) throw new Error('cursor is null');
 	let [keyData] = await DB.selectDistinct()
 		.from(keyTable)
-		.where(sql`${keyTable.id} > ${cursor}`);
+		.where(and(gt(keyTable.id, cursor), eq(keyTable.alive, true)));
 
 	// 如果轮询到最后一个 key，则重头开始
 	if (!keyData) {
@@ -17,21 +18,25 @@ export const getKey = async () => {
 };
 
 // 插入新的 key
-export const insertKey = async (key: string | '') => {
+export const insertKey = async (key: string) => {
 	if (!key) return key;
 	const [hasKey] = await DB.select().from(keyTable).where(eq(keyTable.key, key));
-	if (hasKey) return getKey();
+	if (hasKey) {
+		if (hasKey.alive) return getKey();
+		else {
+			await DB.update(keyTable).set({ alive: true }).where(eq(keyTable.key, key));
+			return key;
+		}
+	}
 	// 如果是新的 key，则返回新的 key 使用并校验
 	const [keyData] = await DB.insert(keyTable).values({ key }).returning();
 	return keyData.key;
 };
 
-export const deleteKey = async (key: string) => {
-	await DB.delete(keyTable).where(eq(keyTable.key, key));
+export const deleteKey = (key: string) => {
+	return DB.update(keyTable).set({ alive: false }).where(eq(keyTable.key, key));
 };
 
 export const getKeyCount = async () => {
-	const count = await DB.$count(keyTable);
-	// console.log('🚀 ~ getKeyCount ~ DB.$count(keyTable):', DB.$count(keyTable));
-	return count;
+	return DB.$count(keyTable);
 };
