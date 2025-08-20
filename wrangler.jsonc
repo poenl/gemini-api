@@ -17,6 +17,12 @@
 			"database_id": "955f3963-783e-4905-af6d-c91d7979bb63",
 			"migrations_dir": "drizzle"
 		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "844d78da1c9344d2947c529dd590f7f3"
+		}
 	]
 	/**
 	 * Smart Placement

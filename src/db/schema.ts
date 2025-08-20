@@ -10,7 +10,7 @@ export const keyTable = sqliteTable(
 	(table) => [index('key_index').on(table.id, table.key, table.alive)]
 );
 
-export const cursorTable = sqliteTable('cursor', {
-	id: int().primaryKey({ autoIncrement: true }),
-	cursor: int().unique().default(0),
-});
+// export const cursorTable = sqliteTable('cursor', {
+// 	id: int().primaryKey({ autoIncrement: true }),
+// 	cursor: int().unique().default(0),
+// });

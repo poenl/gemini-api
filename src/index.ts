@@ -41,7 +41,7 @@ export default {
 			return optionsResponse;
 		}
 		// 数据库初始化
-		initDB(env.DB);
+		initDB(env);
 
 		const route = new URL(request.url).pathname;
 		if (route === '/keycount') {
@@ -91,22 +91,23 @@ export default {
 				const res = error as Response;
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
-				switch (res.status) {
-					case 404:
-						// key 为空
-						return res;
-					case 403:
-						// 没有携带key
-						return res;
-					case 400:
-						// 新key无效，直接返回错误
-						if (headersKey === key) {
-							if (key) await deleteKey(key);
-							return res;
-						}
-						console.warn(`key 错误，尝试获取新key并删除旧key，旧key: ${key}`);
-						[key] = await Promise.all([getKey(), deleteKey(key!)]);
+				const status = res.status;
+
+				if (status !== 400) return res;
+				if (headersKey === key) {
+					if (key) await deleteKey(key);
+					return res;
 				}
+				const resClone = res.clone();
+				const body = await resClone.json<{ error: { message: string } }>();
+
+				if (body.error.message.includes('location is not supported')) {
+					console.warn(`地区限制，使用的key: ${key}`);
+					return res;
+				}
+				console.warn(`key 失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+				[key] = await Promise.all([getKey(), deleteKey(key!)]);
+				newHeaders.set('X-goog-api-key', key);
 
 				// 重试结束，直接返回错误
 				if (i === RETRY_COUNT) return res;
@@ -115,4 +116,4 @@ export default {
 		// 不会执行到这里，解决类型检查错误
 		return new Response('', { status: 500 });
 	},
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<{ KV: KVNamespace; DB: D1Database }>;
