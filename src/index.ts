@@ -1,7 +1,7 @@
 import { initDB } from './db/init';
 import { insertKey, deleteKey, getKey, getKeyCount } from './repository';
 
-const RETRY_COUNT = 5;
+const RETRY_COUNT = 3;
 const GEMINI_API_HOSTNAME = 'generativelanguage.googleapis.com';
 
 // 处理预检请求
@@ -92,22 +92,33 @@ export default {
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				const status = res.status;
-
-				if (status !== 400) return res;
-				if (headersKey === key) {
-					if (key) await deleteKey(key);
-					return res;
-				}
 				const resClone = res.clone();
 				const body = await resClone.json<{ error: { message: string } }>();
+				const message = body.error.message;
+				console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
+				if (status !== 400) return res;
 
-				if (body.error.message.includes('location is not supported')) {
+				// status 400 携带的 key 错误
+
+				if (message.includes('location is not supported')) {
 					console.warn(`地区限制，使用的key: ${key}`);
 					return res;
 				}
-				console.warn(`key 失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
-				[key] = await Promise.all([getKey(), deleteKey(key!)]);
-				newHeaders.set('X-goog-api-key', key);
+				// API key not valid key无效
+				if (message.includes('API key not valid')) {
+					if (headersKey === key) {
+						if (key) await deleteKey(key);
+						return res;
+					}
+					[key] = await Promise.all([getKey(), deleteKey(key!)]);
+					newHeaders.set('X-goog-api-key', key);
+				}
+				// API key expired key过期
+				if (message.includes('API key expired')) {
+					console.warn(`key失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					[key] = await Promise.all([getKey(), deleteKey(key!)]);
+					newHeaders.set('X-goog-api-key', key);
+				}
 
 				// 重试结束，直接返回错误
 				if (i === RETRY_COUNT) return res;
