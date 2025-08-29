@@ -95,8 +95,18 @@ export default {
 				const resClone = res.clone();
 				const body = await resClone.json<{ error: { message: string } }>();
 				const message = body.error.message;
-				console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
-				if (status !== 400) return res;
+
+				if (status === 429) {
+					console.warn(`请求频率过高，使用的key: ${key}`);
+					key = await getKey();
+					newHeaders.set('X-goog-api-key', key);
+					continue;
+				}
+
+				if (status !== 400) {
+					console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
+					return res;
+				}
 
 				// status 400 携带的 key 错误
 
