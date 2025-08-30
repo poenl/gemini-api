@@ -1,5 +1,7 @@
 # Gemini API 共享代理
 
+![可用密钥](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fgemini-api.1760937413.workers.dev%2Fkeycount&query=%24.keyCount&label=%E5%8F%AF%E7%94%A8%E5%AF%86%E9%92%A5&color=brightgreen)
+
 这是一个基于 Cloudflare Worker 的 Google Gemini API 代理服务，它通过汇集并共享所有使用者的 API 密钥，实现了一个高可用的、能自动处理网络问题和密钥失效的 API 共享池。
 
 **API Endpoint:** `https://gemini-api.poenl.top`
