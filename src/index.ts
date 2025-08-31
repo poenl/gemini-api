@@ -92,9 +92,6 @@ export default {
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				const status = res.status;
-				const resClone = res.clone();
-				const body = await resClone.json<{ error: { message: string } }>();
-				const message = body.error.message;
 
 				if (status === 429) {
 					console.warn(`请求频率过高，使用的key: ${key}`);
@@ -104,11 +101,17 @@ export default {
 				}
 
 				if (status !== 400) {
+					if (!res.headers.get('content-type')?.includes('application/json')) return res;
+					const body = await res.json<{ error: { message: string } }>();
+					const message = body.error.message;
 					console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
 					return res;
 				}
 
 				// status 400 携带的 key 错误
+				const resClone = res.clone();
+				const body = await resClone.json<{ error: { message: string } }>();
+				const message = body.error.message;
 
 				if (message.includes('location is not supported')) {
 					console.warn(`地区限制，使用的key: ${key}`);
