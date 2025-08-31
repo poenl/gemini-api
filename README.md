@@ -24,7 +24,6 @@
 - **智能的密钥管理**：当一个 API 密钥因为无效 (`API key not valid`) 或过期 (`API key expired`) 而导致请求失败时，系统会自动从可用池中“软删除”这个密钥。
 - **自动重试机制**：如果请求因密钥问题失败，系统会自动换一个新的密钥重新发起请求（最多重试 3 次），对用户来说是无感的。
 - **解决网络问题**：部署在 Cloudflare 的全球网络上，可以有效解决部分地区访问 Google API 的网络连接问题。
-- **状态查询**：通过访问 `/keycount` 端点，可以查询当前共享池中可用的密钥总数。
 
 ## 如何使用
 
@@ -38,16 +37,21 @@
 #### `curl` 请求示例
 
 ```bash
-curl --location 'https://gemini-api.poenl.top/v1beta/models/gemini-pro:generateContent' \
---header 'Content-Type: application/json' \
---header 'X-goog-api-key: YOUR_GEMINI_API_KEY' \
---data '{
-    "contents":[{
-        "parts":[{
-            "text": "你好，世界！"
-        }]
-    }]
-}'
+curl "https://gemini-api.poenl.top/v1beta/models/gemini-2.0-flash:generateContent" \
+  -H 'Content-Type: application/json' \
+  -H 'X-goog-api-key: GEMINI_API_KEY' \
+  -X POST \
+  -d '{
+    "contents": [
+      {
+        "parts": [
+          {
+            "text": "Explain how AI works in a few words"
+          }
+        ]
+      }
+    ]
+  }'
 ```
 
 ## 工作原理
@@ -56,7 +60,7 @@ curl --location 'https://gemini-api.poenl.top/v1beta/models/gemini-pro:generateC
 2.  Worker 将该密钥存入 Cloudflare D1 数据库的共享池中（如果已存在则更新状态）。
 3.  Worker 从数据库中通过轮询方式获取一个当前标记为“可用”的密钥。
 4.  Worker 使用这个从池中获取的密钥，将用户的原始请求转发给 Google Gemini API 的官方服务器。
-5.  如果 Google API 返回 2xx 错误（例如密钥失效或速率超限），Worker 会将该密钥在数据库中标记为“失效”，然后自动换一个密钥重试（最多 3 次）。
+5.  如果 Google API 返回 4xx 错误（例如密钥失效或速率超限），Worker 会将该密钥在数据库中标记为“失效”，然后自动换一个密钥重试（最多 3 次）。
 6.  最终将 Google API 的响应原样返回给用户。
 
 ## 本地开发与部署
@@ -74,26 +78,30 @@ curl --location 'https://gemini-api.poenl.top/v1beta/models/gemini-pro:generateC
     pnpm install
     ```
 
-3.  **配置 `wrangler.toml`**
-    参考 `wrangler.toml.example` 创建你自己的 `wrangler.toml` 文件，并配置你的 Cloudflare 账户 ID 和 D1 数据库绑定。
+3.  **配置 `wrangler.jsonc`**
+    参考 [wrangler.Configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) 创建你自己的 `wrangler.jsonc` 文件，并配置你的 Cloudflare D1 和 Cloudflare KV 完成绑定。
 
-4.  **数据库迁移**
+4.  **配置 `drizzle.config.ts`**
+    参考 [Get Started with Drizzle and D1](https://orm.drizzle.team/docs/get-started/d1-new) 配置 Cloudflare D1 验证信息，为数据库迁移做准备。
+
+5.  **数据库迁移**
 
     ```bash
     # 本地
+    npx drizzle-kit generate
     pnpm migration
 
     # 生产
     npx drizzle-kit push
     ```
 
-5.  **启动本地开发**
+6.  **启动本地开发**
 
     ```bash
     pnpm dev
     ```
 
-6.  **部署到 Cloudflare**
+7.  **部署到 Cloudflare**
     ```bash
     pnpm deploy
     ```
