@@ -18,19 +18,13 @@ export const getKey = async () => {
 };
 
 // 插入新的 key
-export const insertKey = async (key: string) => {
-	if (!key) return key;
-	const [hasKey] = await DB.select().from(keyTable).where(eq(keyTable.key, key));
-	if (hasKey) {
-		if (hasKey.alive) return getKey();
-		else {
-			await DB.update(keyTable).set({ alive: true }).where(eq(keyTable.key, key));
-			return key;
-		}
-	}
-	// 如果是新的 key，则返回新的 key 使用并校验
-	const [keyData] = await DB.insert(keyTable).values({ key }).returning();
-	return keyData.key;
+export const insertKey = (key: string) => DB.insert(keyTable).values({ key });
+
+export const findKey = async (key: string): Promise<string | undefined> => {
+	const [result] = await DB.select()
+		.from(keyTable)
+		.where(and(eq(keyTable.key, key), eq(keyTable.alive, true)));
+	return result?.key;
 };
 
 export const deleteKey = (key: string) => {
