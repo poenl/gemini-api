@@ -109,6 +109,16 @@ export default {
 					continue;
 				}
 
+				if (status === 403) {
+					const body = await errorResponse.json<{ error: { message: string } }>();
+					const message = body.error.message;
+					if (!message.includes('has been suspended')) return errorResponse;
+					console.error(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					key = await getKey();
+					newHeaders.set('X-goog-api-key', key);
+					continue;
+				}
+
 				if (status !== 400) {
 					if (!errorResponse.headers.get('content-type')?.includes('application/json')) return errorResponse;
 					const body = await errorResponse.json<{ error: { message: string } }>();
