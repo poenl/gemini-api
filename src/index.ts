@@ -114,6 +114,7 @@ export default {
 					const message = body.error.message;
 					if (!message.includes('has been suspended')) return errorResponse;
 					console.error(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
 					newHeaders.set('X-goog-api-key', key);
 					continue;

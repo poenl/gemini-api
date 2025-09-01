@@ -6,11 +6,7 @@ export const keyTable = sqliteTable(
 		id: int().primaryKey({ autoIncrement: true }),
 		key: text().notNull().unique(),
 		alive: int({ mode: 'boolean' }).notNull().default(true),
+		lastUsed: int().notNull().default(0),
 	},
-	(table) => [index('key_index').on(table.id, table.key, table.alive)]
+	(table) => [index('alive_index').on(table.alive), index('lastUsed_index').on(table.lastUsed)]
 );
-
-// export const cursorTable = sqliteTable('cursor', {
-// 	id: int().primaryKey({ autoIncrement: true }),
-// 	cursor: int().unique().default(0),
-// });

@@ -79,7 +79,7 @@ curl "https://gemini-api.poenl.top/v1beta/models/gemini-2.0-flash:generateConten
     ```
 
 3.  **配置 `wrangler.jsonc`**
-    参考 [wrangler.Configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) 创建你自己的 `wrangler.jsonc` 文件，并配置你的 Cloudflare D1 和 Cloudflare KV 完成绑定。
+    参考 [wrangler.Configuration](https://developers.cloudflare.com/workers/wrangler/configuration/) 创建你自己的 `wrangler.jsonc` 文件，并配置你的 Cloudflare D1 完成绑定。
 
 4.  **配置 `drizzle.config.ts`**
     参考 [Get Started with Drizzle and D1](https://orm.drizzle.team/docs/get-started/d1-new) 配置 Cloudflare D1 验证信息，为数据库迁移做准备。

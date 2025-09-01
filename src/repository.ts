@@ -1,19 +1,23 @@
-import { eq, gt, and } from 'drizzle-orm';
-import { DB, KV } from './db/init';
+import { eq, and } from 'drizzle-orm';
+import { DB } from './db/init';
 import { keyTable } from './db/schema';
 
-export const getKey = async () => {
-	const cursor = await KV.get('cursor_key_id');
-	if (!cursor) throw new Error('cursor is null');
+export const getKey = async (): Promise<string> => {
 	let [keyData] = await DB.selectDistinct()
 		.from(keyTable)
-		.where(and(gt(keyTable.id, +cursor), eq(keyTable.alive, true)));
+		.where(eq(keyTable.alive, true))
+		.orderBy(keyTable.lastUsed)
+		.limit(1);
 
-	// 如果轮询到最后一个 key，则重头开始
-	if (!keyData) {
-		[keyData] = await DB.selectDistinct().from(keyTable);
+	const [newKeyData] = await DB.update(keyTable)
+		.set({ lastUsed: Date.now() })
+		.where(and(eq(keyTable.id, keyData.id), eq(keyTable.lastUsed, keyData.lastUsed)))
+		.returning();
+
+	if (!newKeyData) {
+		return getKey();
 	}
-	await KV.put('cursor_key_id', keyData.id.toString());
+
 	return keyData.key;
 };
 
