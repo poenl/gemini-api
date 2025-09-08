@@ -1,7 +1,7 @@
 import { initDB } from './db/init';
 import { insertKey, deleteKey, getKey, getKeyCount, findKey } from './repository';
 
-const RETRY_COUNT = 3;
+const RETRY_COUNT = 5;
 const GEMINI_API_HOSTNAME = 'generativelanguage.googleapis.com';
 
 // 处理预检请求
@@ -113,7 +113,7 @@ export default {
 					const body = await errorResponse.json<{ error: { message: string } }>();
 					const message = body.error.message;
 					if (!message.includes('has been suspended')) return errorResponse;
-					console.error(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					console.warn(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
 					newHeaders.set('X-goog-api-key', key);
