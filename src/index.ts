@@ -57,13 +57,17 @@ export default {
 		const newHeaders = processHeaders(request);
 
 		let isNewKey = true;
-		let key: string | null = request.headers.get('X-goog-api-key');
+		const headersKey = request.headers.get('X-goog-api-key');
+		const queryKey = new URL(request.url).searchParams.get('key');
+		let key: string | null = headersKey || queryKey;
 		if (key !== null) {
 			const hasKey = await findKey(key);
 			if (hasKey) {
 				isNewKey = false;
-				key = await getKey();
-				newHeaders.set('X-goog-api-key', key);
+				if (headersKey) {
+					key = await getKey();
+					newHeaders.set('X-goog-api-key', key);
+				}
 			}
 		}
 
