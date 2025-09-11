@@ -34,6 +34,15 @@ function processHeaders(request: Request): Headers {
 	return headers;
 }
 
+async function getMessage(response: Response): Promise<string | undefined> {
+	const cloneResponse = response.clone();
+	const contentType = cloneResponse.headers.get('content-type');
+	if (!contentType?.includes('application/json') && !contentType?.includes('text/event-stream'))
+		return;
+	const body = await cloneResponse.json<{ error: { message: string } }>();
+	return body.error.message;
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const optionsResponse = handleOptions(request);
@@ -82,7 +91,11 @@ export default {
 		// 重试次数
 		for (let i = 1; i <= RETRY_COUNT; i++) {
 			try {
-				const currentBody = teedRequestBody ? (i !== RETRY_COUNT ? teedRequestBody[0] : teedRequestBody[1]) : undefined;
+				const currentBody = teedRequestBody
+					? i !== RETRY_COUNT
+						? teedRequestBody[0]
+						: teedRequestBody[1]
+					: undefined;
 				if (teedRequestBody && i < RETRY_COUNT) {
 					teedRequestBody = teedRequestBody[1].tee();
 				}
@@ -106,7 +119,7 @@ export default {
 				const status = errorResponse.status;
 
 				if (status === 429) {
-					console.warn(`请求频率过高，使用的key: ${key}`);
+					console.warn(`频率过高，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
 					newHeaders.set('X-goog-api-key', key);
@@ -114,9 +127,8 @@ export default {
 				}
 
 				if (status === 403) {
-					const body = await errorResponse.json<{ error: { message: string } }>();
-					const message = body.error.message;
-					if (!message.includes('has been suspended')) return errorResponse;
+					const message = await getMessage(errorResponse);
+					if (!message?.includes('has been suspended')) return errorResponse;
 					console.warn(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
@@ -124,26 +136,30 @@ export default {
 					continue;
 				}
 
+				if (status === 503) {
+					const message = await getMessage(errorResponse);
+					if (!message?.includes('The model is overloaded')) return errorResponse;
+					console.warn(`模型繁忙 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					if (i === RETRY_COUNT) return errorResponse;
+					continue;
+				}
+
 				if (status !== 400) {
-					if (!errorResponse.headers.get('content-type')?.includes('application/json')) return errorResponse;
-					const body = await errorResponse.json<{ error: { message: string } }>();
-					const message = body.error.message;
-					console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
+					const message = await getMessage(errorResponse);
+					if (message) console.error(`错误响应 (尝试 ${i}/${RETRY_COUNT})`, message);
 					return errorResponse;
 				}
 
 				// status 400 携带的 key 错误
-				const cloneResponse = errorResponse.clone();
-				const body = await cloneResponse.json<{ error: { message: string } }>();
-				const message = body.error.message;
+				const message = await getMessage(errorResponse);
 
-				if (message.includes('location is not supported')) {
+				if (message?.includes('location is not supported')) {
 					console.warn(`地区限制，使用的key: ${key}`);
 					return errorResponse;
 				}
 
 				// API key expired key过期
-				if (message.includes('API key expired')) {
+				if (message?.includes('API key expired')) {
 					console.warn(`key失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					[key] = await Promise.all([getKey(), deleteKey(key!)]);
 					newHeaders.set('X-goog-api-key', key);
