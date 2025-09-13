@@ -103,7 +103,7 @@ export default {
 				const geminiRes = await fetch(url.toString(), {
 					method: request.method,
 					headers: newHeaders,
-					body: currentBody,
+					body: request.method === 'GET' ? undefined : currentBody,
 				});
 
 				if (!geminiRes.ok) throw geminiRes;
@@ -111,15 +111,19 @@ export default {
 				console.log(`成功响应 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 				if (isNewKey) await insertKey(key!);
 				return geminiRes;
-			} catch (error) {
-				const errorResponse = error as Response;
+			} catch (errorResponse) {
+				if (!(errorResponse instanceof Response))
+					return new Response('', {
+						status: 500,
+					});
 				if (isNewKey) return errorResponse;
+
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				const status = errorResponse.status;
 
 				if (status === 429) {
-					console.warn(`频率过高，使用的key: ${key}`);
+					console.warn(`频率过高，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
 					newHeaders.set('X-goog-api-key', key);
@@ -154,7 +158,7 @@ export default {
 				const message = await getMessage(errorResponse);
 
 				if (message?.includes('location is not supported')) {
-					console.warn(`地区限制，使用的key: ${key}`);
+					console.warn(`地区限制，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					return errorResponse;
 				}
 
@@ -163,7 +167,10 @@ export default {
 					console.warn(`key失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					[key] = await Promise.all([getKey(), deleteKey(key!)]);
 					newHeaders.set('X-goog-api-key', key);
+					continue;
 				}
+
+				console.error(`请求错误，${message}`);
 
 				// 重试结束，直接返回错误
 				if (i === RETRY_COUNT) return errorResponse;
