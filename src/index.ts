@@ -1,12 +1,12 @@
 import { initDB } from './db/init';
-import { insertKey, deleteKey, getKey, getKeyCount, findKey } from './repository';
+import { insertKey, updateKeytoNotAlive, getKey, getKeyCount, findKey } from './repository';
 
 const RETRY_COUNT = 5;
 const GEMINI_API_HOSTNAME = 'generativelanguage.googleapis.com';
 
 // 处理预检请求
-function handleOptions(request: Request): Response | null {
-	if (request.method === 'OPTIONS') {
+function handleOptions(method: string): Response | null {
+	if (method === 'OPTIONS') {
 		return new Response(null, {
 			status: 204,
 			headers: {
@@ -34,6 +34,18 @@ function processHeaders(request: Request): Headers {
 	return headers;
 }
 
+function handleBody(body: ReadableStream | null): (() => ReadableStream) | (() => undefined) {
+	if (!body) return () => undefined;
+	let count = 0;
+	return function () {
+		if (count >= RETRY_COUNT) return body!;
+		count++;
+		const teedRequestBody = body!.tee();
+		body = teedRequestBody[1];
+		return teedRequestBody[0];
+	};
+}
+
 async function getMessage(response: Response): Promise<string | undefined> {
 	const cloneResponse = response.clone();
 	const contentType = cloneResponse.headers.get('content-type');
@@ -45,7 +57,8 @@ async function getMessage(response: Response): Promise<string | undefined> {
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		const optionsResponse = handleOptions(request);
+		const method = request.method;
+		const optionsResponse = handleOptions(method);
 		if (optionsResponse) {
 			return optionsResponse;
 		}
@@ -63,7 +76,7 @@ export default {
 			});
 		}
 
-		const newHeaders = processHeaders(request);
+		const headers = processHeaders(request);
 
 		let isNewKey = true;
 		const headersKey = request.headers.get('X-goog-api-key');
@@ -75,7 +88,7 @@ export default {
 				isNewKey = false;
 				if (headersKey) {
 					key = await getKey();
-					newHeaders.set('X-goog-api-key', key);
+					headers.set('X-goog-api-key', key);
 				}
 			}
 		}
@@ -83,56 +96,52 @@ export default {
 		const url = processUrl(request);
 
 		// 处理 body
-		let teedRequestBody: [ReadableStream, ReadableStream] | undefined;
-		if (request.body) {
-			teedRequestBody = request.body.tee();
-		}
+		let getBody = handleBody(request.body);
 
 		// 重试次数
 		for (let i = 1; i <= RETRY_COUNT; i++) {
 			try {
-				const currentBody = teedRequestBody
-					? i !== RETRY_COUNT
-						? teedRequestBody[0]
-						: teedRequestBody[1]
-					: undefined;
-				if (teedRequestBody && i < RETRY_COUNT) {
-					teedRequestBody = teedRequestBody[1].tee();
-				}
+				const body = getBody();
 
 				const geminiRes = await fetch(url.toString(), {
-					method: request.method,
-					headers: newHeaders,
-					body: currentBody,
+					method,
+					headers,
+					body: method === 'GET' ? undefined : body,
 				});
 
 				if (!geminiRes.ok) throw geminiRes;
 				// 成功响应
-				console.log(`成功响应 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
-				if (isNewKey) await insertKey(key!);
+				if (key) {
+					console.log(`成功响应 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					if (isNewKey) await insertKey(key);
+				}
 				return geminiRes;
-			} catch (error) {
-				const errorResponse = error as Response;
+			} catch (errorResponse) {
+				if (!(errorResponse instanceof Response))
+					return new Response('', {
+						status: 500,
+					});
 				if (isNewKey) return errorResponse;
+
 				// 处理错误
 				// 状态码官方文档：https://ai.google.dev/gemini-api/docs/troubleshooting?hl=zh-cn
 				const status = errorResponse.status;
 
 				if (status === 429) {
-					console.warn(`频率过高，使用的key: ${key}`);
+					console.warn(`频率过高，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
 					key = await getKey();
-					newHeaders.set('X-goog-api-key', key);
+					headers.set('X-goog-api-key', key);
 					continue;
 				}
 
 				if (status === 403) {
 					const message = await getMessage(errorResponse);
 					if (!message?.includes('has been suspended')) return errorResponse;
-					console.warn(`配额不足 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					console.warn(`权限错误 (尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					if (i === RETRY_COUNT) return errorResponse;
-					key = await getKey();
-					newHeaders.set('X-goog-api-key', key);
+					[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
+					headers.set('X-goog-api-key', key);
 					continue;
 				}
 
@@ -154,15 +163,27 @@ export default {
 				const message = await getMessage(errorResponse);
 
 				if (message?.includes('location is not supported')) {
-					console.warn(`地区限制，使用的key: ${key}`);
+					console.warn(`地区限制，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
 					return errorResponse;
 				}
 
 				// API key expired key过期
 				if (message?.includes('API key expired')) {
 					console.warn(`key失效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
-					[key] = await Promise.all([getKey(), deleteKey(key!)]);
-					newHeaders.set('X-goog-api-key', key);
+					[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
+					headers.set('X-goog-api-key', key);
+				}
+				// API key not valid key无效
+				if (message?.includes('API key not valid')) {
+					console.warn(`key无效，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
+					headers.set('X-goog-api-key', key);
+				}
+				// API Key not found key不存在
+				if (message?.includes('API Key not found')) {
+					console.warn(`key不存在，(尝试 ${i}/${RETRY_COUNT})，使用的key: ${key}`);
+					[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
+					headers.set('X-goog-api-key', key);
 				}
 
 				// 重试结束，直接返回错误

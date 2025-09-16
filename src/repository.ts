@@ -3,7 +3,7 @@ import { DB } from './db/init';
 import { keyTable } from './db/schema';
 
 export const getKey = async (): Promise<string> => {
-	let [keyData] = await DB.selectDistinct()
+	let [keyData] = await DB.select()
 		.from(keyTable)
 		.where(eq(keyTable.alive, true))
 		.orderBy(keyTable.lastUsed)
@@ -15,6 +15,7 @@ export const getKey = async (): Promise<string> => {
 		.returning();
 
 	if (!newKeyData) {
+		await new Promise((resolve) => setTimeout(resolve, Math.random() * 100)); // 防止惊群
 		return getKey();
 	}
 
@@ -25,16 +26,17 @@ export const getKey = async (): Promise<string> => {
 export const insertKey = (key: string) => DB.insert(keyTable).values({ key });
 
 export const findKey = async (key: string): Promise<string | undefined> => {
-	const [result] = await DB.select()
-		.from(keyTable)
-		.where(and(eq(keyTable.key, key), eq(keyTable.alive, true)));
+	const [result] = await DB.select().from(keyTable).where(eq(keyTable.key, key));
+	if (result && !result.alive) {
+		await deleteKey(key);
+		return undefined;
+	}
 	return result?.key;
 };
 
-export const deleteKey = (key: string) => {
-	return DB.update(keyTable).set({ alive: false }).where(eq(keyTable.key, key));
-};
+export const updateKeytoNotAlive = (key: string) =>
+	DB.update(keyTable).set({ alive: false }).where(eq(keyTable.key, key));
 
-export const getKeyCount = async () => {
-	return DB.$count(keyTable, eq(keyTable.alive, true));
-};
+const deleteKey = (key: string) => DB.delete(keyTable).where(eq(keyTable.key, key));
+
+export const getKeyCount = async () => DB.$count(keyTable, eq(keyTable.alive, true));
