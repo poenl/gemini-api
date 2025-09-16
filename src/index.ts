@@ -6,8 +6,7 @@ import { RETRY_COUNT } from './comfig';
 
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
-		const method = request.method;
-		const optionsResponse = handleOptions(method);
+		const optionsResponse = handleOptions(request);
 		if (optionsResponse) {
 			return optionsResponse;
 		}
@@ -45,17 +44,17 @@ export default {
 		const url = processUrl(request);
 
 		// 处理 body
-		let getBody = handleBody(request.body);
+		const getBody = handleBody(request.body);
+
+		const method = request.method;
 
 		// 重试次数
 		for (let i = 1; i <= RETRY_COUNT; i++) {
 			try {
-				const body = getBody();
-
 				const geminiRes = await fetch(url.toString(), {
 					method,
 					headers,
-					body: method === 'GET' ? undefined : body,
+					body: method === 'GET' ? undefined : getBody(),
 				});
 
 				if (!geminiRes.ok) throw geminiRes;

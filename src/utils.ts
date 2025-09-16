@@ -1,12 +1,19 @@
 import { GEMINI_API_HOSTNAME, RETRY_COUNT } from './comfig';
 
 // 处理预检请求
-export function handleOptions(method: string): Response | null {
+export function handleOptions(request: Request): Response | null {
+	const method = request.method;
+	const headers = request.headers;
+	const requestMethod = headers.get('Access-Control-Request-Method');
+	const requestHeaders = headers.get('Access-Control-Request-Headers');
 	if (method === 'OPTIONS') {
 		return new Response(null, {
 			status: 204,
 			headers: {
 				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Allow-Methods': requestMethod ?? '',
+				'Access-Control-Allow-Headers': requestHeaders ?? '',
+				'Access-Control-Max-Age': '31536000',
 			},
 		});
 	}
