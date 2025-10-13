@@ -87,12 +87,14 @@ curl "https://gemini-api.poenl.top/v1beta/models/gemini-2.0-flash:generateConten
 5.  **数据库迁移**
 
     ```bash
-    # 本地
-    npx drizzle-kit generate
-    pnpm migration
+    # 生成 SQL 迁移文件
+    pnpm generate
 
-    # 生产
-    npx drizzle-kit push
+    # 本地迁移
+    pnpm migrations:dev
+
+    # 生产迁移
+    pnpm migrations:prod
     ```
 
 6.  **启动本地开发**

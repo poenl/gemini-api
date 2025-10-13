@@ -8,5 +8,5 @@ export const keyTable = sqliteTable(
 		alive: int({ mode: 'boolean' }).notNull().default(true),
 		lastUsed: int().notNull().default(0),
 	},
-	(table) => [index('alive_index').on(table.alive), index('lastUsed_index').on(table.lastUsed)]
+	(table) => [index('alive_lastUsed_index').on(table.alive, table.lastUsed)]
 );

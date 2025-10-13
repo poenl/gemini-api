@@ -1,23 +1,14 @@
-import { eq, and } from 'drizzle-orm';
-import { DB } from './db/init';
-import { keyTable } from './db/schema';
+import { eq } from 'drizzle-orm';
+import { DB } from './init';
+import { keyTable } from './schema';
 
 export const getKey = async (): Promise<string> => {
-	let [keyData] = await DB.select()
-		.from(keyTable)
+	const [keyData] = await DB.update(keyTable)
+		.set({ lastUsed: Date.now() })
 		.where(eq(keyTable.alive, true))
 		.orderBy(keyTable.lastUsed)
-		.limit(1);
-
-	const [newKeyData] = await DB.update(keyTable)
-		.set({ lastUsed: Date.now() })
-		.where(and(eq(keyTable.id, keyData.id), eq(keyTable.lastUsed, keyData.lastUsed)))
+		.limit(1)
 		.returning();
-
-	if (!newKeyData) {
-		await new Promise((resolve) => setTimeout(resolve, Math.random() * 100)); // 防止惊群
-		return getKey();
-	}
 
 	return keyData.key;
 };

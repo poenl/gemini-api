@@ -8,7 +8,9 @@
 		"prod": "wrangler dev",
 		"test": "vitest",
 		"cf-typegen": "wrangler types",
-		"migrations": "wrangler d1 migrations apply gemini-key"
+		"generate": "drizzle-kit generate",
+		"migrations:dev": "wrangler d1 migrations apply gemini-key --local",
+		"migrations:prod": "wrangler d1 migrations apply gemini-key --remote"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.8.19",

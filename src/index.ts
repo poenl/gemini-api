@@ -1,5 +1,5 @@
 import { initDB } from './db/init';
-import { insertKey, getKey, getKeyCount, findKey } from './repository';
+import { insertKey, getKey, getKeyCount, findKey } from './db/repository';
 import handleRequestError from './handleRequestError';
 import { handleBody, handleOptions, processHeaders, processUrl } from './utils';
 import { RETRY_COUNT } from './comfig';

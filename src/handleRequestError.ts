@@ -1,5 +1,5 @@
 import { RETRY_COUNT } from './comfig';
-import { getKey, updateKeytoNotAlive } from './repository';
+import { getKey, updateKeytoNotAlive } from './db/repository';
 
 interface HandleRequestError {
 	[key: number | string]: (
@@ -79,10 +79,8 @@ const handleRequestError: HandleRequestError = {
 
 export default new Proxy(handleRequestError, {
 	get: (target, prop) => {
-		if (Object.keys(handleRequestError).includes(prop as string)) {
-			return Reflect.get(target, prop);
-		} else {
-			return Reflect.get(target, 'default');
-		}
+		const value = Reflect.get(target, prop);
+		if (value) return value;
+		else return Reflect.get(target, 'default');
 	},
 });
