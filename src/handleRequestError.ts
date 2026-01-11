@@ -20,10 +20,14 @@ async function getMessage(response: Response): Promise<string | undefined> {
 
 const handleRequestError: HandleRequestError = {
 	429: async (errorResponse, headers, currentRetryCount) => {
-		let key = headers.get('X-goog-api-key');
-		console.warn(`频率过高（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${key}`);
-		key = await getKey();
-		headers.set('X-goog-api-key', key);
+		let errorType = '频率过高';
+		const [newKey, message] = await Promise.all([getKey(), getMessage(errorResponse)]);
+		if (message?.includes('You exceeded your current quota')) {
+			errorType = '配额不足';
+		}
+		const oldKey = headers.get('X-goog-api-key');
+		console.warn(`${errorType}（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${oldKey}`);
+		headers.set('X-goog-api-key', newKey);
 	},
 
 	403: async (errorResponse, headers, currentRetryCount) => {
@@ -72,7 +76,10 @@ const handleRequestError: HandleRequestError = {
 	// 其他错误
 	default: async (errorResponse, headers, currentRetryCount) => {
 		const message = await getMessage(errorResponse);
-		if (message) console.error(`错误响应（尝试 ${currentRetryCount}/${RETRY_COUNT}）`, message);
+		if (message)
+			console.error(
+				`错误响应（尝试 ${currentRetryCount}/${RETRY_COUNT}），响应状态码：${errorResponse.status}，错误信息：${message}`
+			);
 		return errorResponse;
 	},
 };
