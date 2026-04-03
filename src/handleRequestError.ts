@@ -5,7 +5,7 @@ interface HandleRequestError {
 	[key: number | string]: (
 		errorResponse: Response,
 		headers: Headers,
-		currentRetryCount: number
+		currentRetryCount: number,
 	) => Promise<Response | void>;
 }
 
@@ -59,26 +59,33 @@ const handleRequestError: HandleRequestError = {
 			console.warn(`key失效（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${key}`);
 			[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
 			headers.set('X-goog-api-key', key);
+			return;
 		}
 		// API key not valid key无效
 		if (message?.includes('API key not valid')) {
 			console.warn(`key无效（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${key}`);
 			[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
 			headers.set('X-goog-api-key', key);
+			return;
 		}
 		// API Key not found key不存在
 		if (message?.includes('API Key not found')) {
 			console.warn(`key不存在（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${key}`);
 			[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
 			headers.set('X-goog-api-key', key);
+			return;
 		}
+		// 其他原因
+		console.error(
+			`错误响应（尝试 ${currentRetryCount}/${RETRY_COUNT}），响应状态码：${errorResponse.status}，错误信息：${message}`,
+		);
 	},
 	// 其他错误
 	default: async (errorResponse, headers, currentRetryCount) => {
 		const message = await getMessage(errorResponse);
 		if (message)
 			console.error(
-				`错误响应（尝试 ${currentRetryCount}/${RETRY_COUNT}），响应状态码：${errorResponse.status}，错误信息：${message}`
+				`错误响应（尝试 ${currentRetryCount}/${RETRY_COUNT}），响应状态码：${errorResponse.status}，错误信息：${message}`,
 			);
 		return errorResponse;
 	},

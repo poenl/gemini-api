@@ -48,7 +48,7 @@ export default {
 
 		const method = request.method;
 
-		// 重试次数
+		// 重试
 		for (let i = 1; i <= RETRY_COUNT; i++) {
 			try {
 				const geminiRes = await fetch(url.toString(), {
@@ -74,7 +74,7 @@ export default {
 
 				const result = await handleRequestError[status](errorResponse, headers, i);
 				if (result) return result;
-				// 重试结束，直接返回错误
+				// 重试结束，返回错误结果
 				if (i === RETRY_COUNT) return errorResponse;
 			}
 		}
