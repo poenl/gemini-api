@@ -66,6 +66,7 @@ export default {
 				return geminiRes;
 			} catch (errorResponse) {
 				if (!(errorResponse instanceof Response)) return new Response('', { status: 500 });
+				// 首次使用的 key，直接返回错误响应
 				if (isNewKey) return errorResponse;
 
 				// 处理错误

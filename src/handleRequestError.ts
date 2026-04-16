@@ -32,8 +32,6 @@ const handleRequestError: HandleRequestError = {
 
 	403: async (errorResponse, headers, currentRetryCount) => {
 		let key = headers.get('X-goog-api-key');
-		const message = await getMessage(errorResponse);
-		if (!message?.includes('has been suspended')) return errorResponse;
 		console.warn(`权限错误（尝试 ${currentRetryCount}/${RETRY_COUNT}），使用的key: ${key}`);
 		[key] = await Promise.all([getKey(), updateKeytoNotAlive(key!)]);
 		headers.set('X-goog-api-key', key);
